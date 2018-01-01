@@ -28,9 +28,11 @@ namespace AnalyZer.ViewModels
         public void Analyze()
         {
             var count = ops.Where(o => Model.Text.Contains(o)).Count();
-            var UsedBranchingOperators = Model.Text.Split(' ').Where(el => (new Regex("((^if)|(^else)|(^elif))(:*)(\r*)(\n*)")).IsMatch(el));
-            MessageBox.Show($"Length: {Model.Text.Length}\n" +
-                $"Operators: {count}", "Results", MessageBoxButton.OK);
+            var UsedBranchingOperators = Model.Text.Split(' ').Where(el => (new Regex("((^if)|(^else)|(^elif))(:*)(\r*)(\n*)")).IsMatch(el)).ToList();
+            var countBranches = UsedBranchingOperators.Count;
+            MessageBox.Show($"Length: {Model.Text.Split('\n').Count()}\n" +
+                $"Operators: {count}\n" +
+                $"Branches: {countBranches}", "Results", MessageBoxButton.OK);
         }
     }
 }
