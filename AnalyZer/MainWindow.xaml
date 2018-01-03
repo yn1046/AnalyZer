@@ -1,0 +1,23 @@
+﻿<Window x:Class="AnalyZer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:AnalyZer"
+        mc:Ignorable="d"
+        Title="AnalyZer v0.1" Height="425.651" Width="607.031">
+    <Window.Background>
+        <ImageBrush ImageSource="Resource/art.jpg" Stretch="UniformToFill"/>
+    </Window.Background>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition />
+            <ColumnDefinition Width="200" />
+        </Grid.ColumnDefinitions>
+        <TextBox Grid.Column="0" Background="#B2FFFFFF" Margin="10" 
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" 
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     TextWrapping="Wrap" AcceptsReturn="True" Text="{Binding Model.Text}" />
+        <Button Grid.Column="1" Content="Calculate metrics" Height="30" Width="180" Command="{Binding DoAnalyze}" />
+    </Grid>
+</Window>
