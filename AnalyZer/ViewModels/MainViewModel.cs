@@ -18,9 +18,12 @@ namespace AnalyZer.ViewModels
         public ICommand DoAnalyzeGilb { get; set; }
         public ICommand DoAnalyzeChepin { get; set; }
 
-        public string[] ops = { "+", "-", "*", "/", "%", "**", "//" , "==", "!=",
-        "<>", ">", "<", ">=", "<=", "=", "+=", "-=", "*=", "/=", "%=", "**=", "//=",
-        "&", "|", "^", "~", "<<", ">>", "in", "not in", "is", "is not", "or", "and", "?"};
+        private delegate bool Criteria(int count, bool isControlling);
+
+        public string[] operators = { "+", "-", "*", "/", "%", "**", "//" ,
+            "==", "!=", "<>", ">", "<", ">=", "<=", "&", "|", "^", "~", "<<", ">>",
+            "in", "not in", "is", "is not", "or", "and", "?"};
+        public string[] assignationOperators = { "=", "+=", "-=", "*=", "/=", "%=", "**=", "//=" };
 
         public MainViewModel()
         {
@@ -42,7 +45,7 @@ namespace AnalyZer.ViewModels
             var UsedBranchingOperators = Model.Text.Split(' ').Where(el => (new Regex("((^if)|(^else)|(^elif))(:*)(\r*)(\n*)")).IsMatch(el)).ToList();
             var Loops = Model.Text.Split(' ').Where(el => (new Regex("((^)|( ))(for|while)")).IsMatch(el)).ToList();
             var GilbCL = UsedBranchingOperators.Count + Loops.Count;
-            var LinesWithOperators = Model.Text.Split('\n').Where(l => ops.Any(o => l.Contains(o))).ToList();
+            var LinesWithOperators = Model.Text.Split('\n').Where(l => operators.Any(o => l.Contains(o)) || assignationOperators.Any(o => l.Contains(o))).ToList();
             var Gilbcl = Math.Round((double)GilbCL / LinesWithOperators.Count, 3);
 
             var LinesList = Model.Text.Split('\n').ToList();
@@ -84,10 +87,16 @@ namespace AnalyZer.ViewModels
             var idList = new List<string>();
 
             var result = "Classes and functions span:\n";
-            FilterLines(Lines, @"(def|class) (.*)\(", ref idList, ref result);
+            FilterLines(Lines, @"(def|class) (\w+)\(?", ref idList, ref result);
 
             result += "\nVariables span:\n";
-            FilterLines(Lines, @"( |^)+(\w+) = ", ref idList, ref result);
+            FilterLines(Lines, @"( |^)+(\w+) ?= ?", ref idList, ref result);
+
+            var enteredVariables = ClassifyVariables(Lines, @"(\w+) ?= ?input\(", (count, control) => count == 1 && !control);
+            var modifiableVariables = ClassifyVariables(Lines, @"( |^)+(\w+) ?= ?", (count, control) => count > 1 && !control);
+            var controllingVariables = ClassifyVariables(Lines, @"( |^)+(\w+) ?= ?", (count, control) => control);
+            var parasiteVariables = ClassifyVariables(Lines, @"( |^)+(\w+) ?= ?", (count, control) => true).Where(v => !(enteredVariables.Contains(v) 
+            || modifiableVariables.Contains(v) || controllingVariables.Contains(v)));
 
             MessageBox.Show(result, "Results", MessageBoxButton.OK);
         }
@@ -103,11 +112,28 @@ namespace AnalyZer.ViewModels
                     if (!idList.Contains(id))
                     {
                         idList.Add(id);
-                        var count = Lines.Where(l => (new Regex($@"[^\']\b({id})\b[^\']")).IsMatch(l)).Count() - 1;
+                        var count = Lines.Where(l => (new Regex($@"(^|[^\'|""])\b({id})\b($|[^\'|""])")).IsMatch(l)).Count() - 1;
                         if (count != 0) result += $"{id}: {count}\n";
                     }
                 }
             }
+        }
+
+        private List<string> ClassifyVariables(List<string> Lines, string reg, Criteria criteria)
+        {
+            var SuitableVariables = new List<string>();
+            foreach (var line in Lines)
+            {
+                var matchId = Regex.Match(line, reg);
+                if (matchId.Success)
+                {
+                    var id = matchId.Groups[1].Value.Trim();
+                    var count = Lines.Where(l => assignationOperators.Any(o => (new Regex($@"(^|[^\'|""])\b({id})\b ?{o}($|[^\'|""])")).IsMatch(l))).Count();
+                    var isControlling = Lines.Any(l => operators.Any(o => (new Regex($@"(^|[^\'|""])\b({id})\b($|[^\'|""])")).IsMatch(l) && l.Contains(o)));
+                    if (criteria(count, isControlling)) SuitableVariables.Add(id);
+                }
+            }
+            return SuitableVariables;
         }
 
     }
