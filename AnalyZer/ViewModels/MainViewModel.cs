@@ -20,10 +20,9 @@ namespace AnalyZer.ViewModels
 
         private delegate bool Criteria(int count, bool isControlling);
 
-        public string[] operators = { "+", "-", "*", "/", "%", "**", "//" ,
-            "==", "!=", "<>", ">", "<", ">=", "<=", "&", "|", "^", "~", "<<", ">>",
-            "in", "not in", "is", "is not", "or", "and", "?"};
-        public string[] assignationOperators = { "=", "+=", "-=", "*=", "/=", "%=", "**=", "//=" };
+        public string[] operators = { "==", "!=", "<>", ">", "<", ">=", "<=", "&", @"\|", @"\^", "~", "<<", ">>",
+            @"\bin\b", @"\bnot in\b", @"\bis\b", @"\bis not\b", @"\bor\b", @"\band\b", @"\?"};
+        public string[] assignationOperators = { @"\+", "-", @"\*", "/", "%", @"\*\*", "//", "=", @"\+=", @"\-=", @"\*=", "/=", "%=", @"\*\*=", "//=" };
 
         public MainViewModel()
         {
@@ -45,7 +44,8 @@ namespace AnalyZer.ViewModels
             var UsedBranchingOperators = Model.Text.Split(' ').Where(el => (new Regex("((^if)|(^else)|(^elif))(:*)(\r*)(\n*)")).IsMatch(el)).ToList();
             var Loops = Model.Text.Split(' ').Where(el => (new Regex("((^)|( ))(for|while)")).IsMatch(el)).ToList();
             var GilbCL = UsedBranchingOperators.Count + Loops.Count;
-            var LinesWithOperators = Model.Text.Split('\n').Where(l => operators.Any(o => l.Contains(o)) || assignationOperators.Any(o => l.Contains(o))).ToList();
+            var LinesWithOperators = Model.Text.Split('\n').Where(l => operators.Any(o => (new Regex($@"(^|[^\'|""])({o})($|[^\'|""])")).IsMatch(l)) 
+            || assignationOperators.Any(o => (new Regex($@"(^|[^\'|""])({o})($|[^\'|""])")).IsMatch(l))).ToList();
             var Gilbcl = Math.Round((double)GilbCL / LinesWithOperators.Count, 3);
 
             var LinesList = Model.Text.Split('\n').ToList();
@@ -93,12 +93,20 @@ namespace AnalyZer.ViewModels
             FilterLines(Lines, @"( |^)+(\w+) ?= ?", ref idList, ref result);
 
             var enteredVariables = ClassifyVariables(Lines, @"(\w+) ?= ?input\(", (count, control) => count == 1 && !control);
-            var modifiableVariables = ClassifyVariables(Lines, @"( |^)+(\w+) ?= ?", (count, control) => count > 1 && !control);
-            var controllingVariables = ClassifyVariables(Lines, @"( |^)+(\w+) ?= ?", (count, control) => control);
-            var parasiteVariables = ClassifyVariables(Lines, @"( |^)+(\w+) ?= ?", (count, control) => true).Where(v => !(enteredVariables.Contains(v) 
-            || modifiableVariables.Contains(v) || controllingVariables.Contains(v)));
+            var modifiableVariables = ClassifyVariables(Lines, @"(\w+) ?= ?", (count, control) => count > 1 && !control);
+            var controllingVariables = ClassifyVariables(Lines, @"(\w+) ?= ?", (count, control) => control);
+            var parasiteVariables = ClassifyVariables(Lines, @"(\w+) ?= ?", (count, control) => true).Where(v => !(enteredVariables.Contains(v) 
+            || modifiableVariables.Contains(v) || controllingVariables.Contains(v))).ToList();
 
-            MessageBox.Show(result, "Results", MessageBoxButton.OK);
+            result += $"\nChepin metrics:\n" +
+                $"P = {enteredVariables.Count}\n" +
+                $"M = {modifiableVariables.Count}\n" +
+                $"C = {controllingVariables.Count}\n" +
+                $"T = {parasiteVariables.Count}\n" +
+                $"\nQ = {enteredVariables.Count + 2*modifiableVariables.Count+ 3*controllingVariables.Count+ 0.5*parasiteVariables.Count}";
+
+            var myWindow = new TextWindow(result);
+            myWindow.Show();
         }
 
         private void FilterLines(List<string> Lines, string reg, ref List<string> idList, ref string result)
@@ -128,9 +136,13 @@ namespace AnalyZer.ViewModels
                 if (matchId.Success)
                 {
                     var id = matchId.Groups[1].Value.Trim();
-                    var count = Lines.Where(l => assignationOperators.Any(o => (new Regex($@"(^|[^\'|""])\b({id})\b ?{o}($|[^\'|""])")).IsMatch(l))).Count();
-                    var isControlling = Lines.Any(l => operators.Any(o => (new Regex($@"(^|[^\'|""])\b({id})\b($|[^\'|""])")).IsMatch(l) && l.Contains(o)));
-                    if (criteria(count, isControlling)) SuitableVariables.Add(id);
+                    if (!SuitableVariables.Contains(id))
+                    {
+                        var count = Lines.Where(l => assignationOperators.Any(o => (new Regex($@"(^|[^\'|""])\b({id})\b ?{o}($|[^\'|""])")).IsMatch(l))).Count();
+                        var isControlling = Lines.Any(l => operators.Any(o => (new Regex($@"(^|[^\'|""])\b({id})\b($|[^\'|""])")).IsMatch(l)
+                        && (new Regex($@"(^|[^\'|""])({o})($|[^\'|""])")).IsMatch(l)));
+                        if (criteria(count, isControlling)) SuitableVariables.Add(id);
+                    }
                 }
             }
             return SuitableVariables;
