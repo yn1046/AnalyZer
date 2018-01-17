@@ -17,17 +17,19 @@ namespace AnalyZer.ViewModels
 
         public ICommand DoAnalyzeGilb { get; set; }
         public ICommand DoAnalyzeChepin { get; set; }
+        public ICommand DoAnalyzeHalstead { get; set; }
 
         private delegate bool Criteria(int count, bool isControlling);
 
         public string[] operators = { "==", "!=", "<>", ">", "<", ">=", "<=", "&", @"\|", @"\^", "~", "<<", ">>",
-            @"\bin\b", @"\bnot in\b", @"\bis\b", @"\bis not\b", @"\bor\b", @"\band\b", @"\?"};
+            "in", "not in", "is", "is not", "or", "and", @"\?"};
         public string[] assignationOperators = { @"\+", "-", @"\*", "/", "%", @"\*\*", "//", "=", @"\+=", @"\-=", @"\*=", "/=", "%=", @"\*\*=", "//=" };
 
         public MainViewModel()
         {
             DoAnalyzeGilb = new DelegateCommand(AnalyzeGilb);
             DoAnalyzeChepin = new DelegateCommand(AnalyzeChepin);
+            DoAnalyzeHalstead = new DelegateCommand(AnalyzeHalstead);
             Model = new Models.Main();
             try
             {
@@ -60,12 +62,12 @@ namespace AnalyZer.ViewModels
                     underIf = false;
                     cliHere = 0;
                 }
-                if (underIf && (new Regex("( |^)(if |else|elif)")).IsMatch(LinesList[i]))
+                if (underIf && (new Regex(@"\b(if|else|elif|for|while)\b")).IsMatch(LinesList[i]))
                 {
                     cliHere++;
                     indExtIf = indHere;
                 }
-                if (!underIf && (new Regex("( |^)(if |else|elif)")).IsMatch(LinesList[i]))
+                if (!underIf && (new Regex(@"\b(if|else|elif|for|while)\b")).IsMatch(LinesList[i]))
                 {
                     underIf = true;
                     indExtIf = indHere;
@@ -73,7 +75,8 @@ namespace AnalyZer.ViewModels
                 }
 
                 if (cliHere > cli) cli = cliHere;
-            }
+            }          
+
 
             MessageBox.Show($"Code length: {Model.Text.Split('\n').Count()}\n" +
                 $"Branches & loops (CL): {GilbCL}\n" +
@@ -83,15 +86,18 @@ namespace AnalyZer.ViewModels
 
         public void AnalyzeChepin()
         {
-            var Lines = Model.Text.Split('\n').ToList();
-            var idList = new List<string>();
+            var defList = new List<string>();
+            var varList = new List<string>();
 
             var result = "Classes and functions span:\n";
-            FilterLines(Lines, @"(def|class) (\w+)\(?", ref idList, ref result);
+            defList = GetVariables(@"(def|class) (\w+)\(?");
+            defList.ForEach(d => result += $"{d}: {CountVariables(d) - 1}\n");
 
             result += "\nVariables span:\n";
-            FilterLines(Lines, @"( |^)+(\w+) ?= ?", ref idList, ref result);
+            varList = GetVariables(@"( |^)+(\w+) ?= ?");
+            varList.ForEach(v => result += $"{v}: {CountVariables(v) - 1}\n");
 
+            var Lines = Model.Text.Split('\n').ToList();
             var enteredVariables = ClassifyVariables(Lines, @"(\w+) ?= ?input\(", (count, control) => count == 1 && !control);
             var modifiableVariables = ClassifyVariables(Lines, @"(\w+) ?= ?", (count, control) => count > 1 && !control);
             var controllingVariables = ClassifyVariables(Lines, @"(\w+) ?= ?", (count, control) => control);
@@ -109,22 +115,42 @@ namespace AnalyZer.ViewModels
             myWindow.Show();
         }
 
-        private void FilterLines(List<string> Lines, string reg, ref List<string> idList, ref string result)
+        public void AnalyzeHalstead()
         {
-            foreach (var line in Lines)
+            var n1 = operators.Where(o => (new Regex($@"(^|[^\'|""])(\b| )({o})(\b| )($|[^\'|""])")).IsMatch(Model.Text)).Count() + 
+                assignationOperators.Where(o => (new Regex($@"(^|[^\'|""])(\b| )({o})(\b| )($|[^\'|""])")).IsMatch(Model.Text)).Count();
+            var n2 = GetVariables(@"( |^)+(\w+) ?= ?").Count;
+            var N1 = operators.Select(o => CountVariables(o)).Aggregate((a, o) => a + o)
+                + assignationOperators.Select(o => CountVariables(o)).Aggregate((a, o) => a + o);
+            var N2 = GetVariables(@"( |^)+(\w+) ?= ?").Select(v => CountVariables(v)).Aggregate((a, v) => a + v);
+            var n = n1 + n2;
+            var N = N1 + N2;
+            var V = N * Math.Log(n, 2);
+            var ops = operators.Where(o => (new Regex($@"(^|[^\'|""])(\b| )({o})(\b| )($|[^\'|""])")).IsMatch(Model.Text)).ToList();
+            var asops = assignationOperators.Where(o => (new Regex($@"(^|[^\'|""])(\b| )({o})(\b| )($|[^\'|""])")).IsMatch(Model.Text)).ToList();
+
+            MessageBox.Show($"Dictionary (n): {n}\n" +
+                $"Length (N): {N}\n" +
+                $"Volume (V): {V}", "Results", MessageBoxButton.OK);
+        }
+
+        private int CountVariables(string id) => (new Regex($@"(^|[^\'|""])\b({id})\b($|[^\'|""])")).Matches(Model.Text).Count;
+
+        private List<string> GetVariables(string reg)
+        {
+            var idList = new List<string>();
+            var LinesList = Model.Text.Split('\n');
+            var MatchesList = (new Regex(reg)).Matches(Model.Text);
+            foreach (var line in LinesList)
             {
-                var matchId = Regex.Match(line, reg);
-                if (matchId.Success)
+                var match = (new Regex(reg)).Match(line);
+                if (match.Success)
                 {
-                    var id = matchId.Groups[2].Value.Trim();
-                    if (!idList.Contains(id))
-                    {
-                        idList.Add(id);
-                        var count = Lines.Where(l => (new Regex($@"(^|[^\'|""])\b({id})\b($|[^\'|""])")).IsMatch(l)).Count() - 1;
-                        if (count != 0) result += $"{id}: {count}\n";
-                    }
+                    var id = match.Groups[2].Value.Trim();
+                    if (!idList.Contains(id)) idList.Add(id);
                 }
             }
+            return idList;
         }
 
         private List<string> ClassifyVariables(List<string> Lines, string reg, Criteria criteria)

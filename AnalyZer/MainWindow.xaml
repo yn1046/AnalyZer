@@ -20,6 +20,6 @@
                      TextWrapping="Wrap" AcceptsReturn="True" Text="{Binding Model.Text}" />
         <Button Grid.Column="1" Content="Calculate Gilb's metrics" Height="30" Width="180" Command="{Binding DoAnalyzeGilb}" Margin="10,0,10,80" VerticalAlignment="Bottom" />
         <Button Grid.Column="1" Content="Calculate Chepin's metrics" Height="30" Width="180" Command="{Binding DoAnalyzeChepin}" Margin="10,0,10,45" VerticalAlignment="Bottom" />
-        <Button Grid.Column="1" Content="Calculate Halstead's metrics" Height="30" Width="180" Command="{Binding DoAnalyzeGilb}" Margin="10,0,10,10" VerticalAlignment="Bottom" />
+        <Button Grid.Column="1" Content="Calculate Halstead's metrics" Height="30" Width="180" Command="{Binding DoAnalyzeHalstead}" Margin="10,0,10,10" VerticalAlignment="Bottom" />
     </Grid>
 </Window>
